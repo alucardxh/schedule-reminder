@@ -1,0 +1,50 @@
+name: Build and Push Private Docker Image
+
+# 触发条件：当 main 分支有代码 push 进来时，触发这个工作流
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    # 授予工作流向 GitHub Packages 写入镜像的权限
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      # 1. 检出（下载）你仓库里的代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 登录到 GitHub 容器镜像中心 (ghcr.io)
+      # 这里的 GITHUB_TOKEN 是 GitHub 自动生成的临时密码，无需手动配置
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. 提取镜像的标签和元数据（自动把 commit 顺号或 branch 名转为 Tag）
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      # 4. 构建并推送 Docker 镜像
+      # 它会自动寻找你项目根目录下的 Dockerfile 进行编译
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
